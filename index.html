@@ -454,6 +454,25 @@
   }
   function need(r, what) { if (r < 0) throw new Error('Format sheet berubah: bagian "' + what + '" tidak ditemukan.'); return r; }
 
+  // Pengelompokan jenis penerimaan untuk tampilan: null = tidak ditampilkan (Jagir & denda).
+  function grup(nama) {
+    if (/JAGIR|DENDA/i.test(nama)) return null;
+    if (/^(BOT|BTO|KSP)(\s*\/\s*(BOT|BTO|KSP))*$/i.test(nama)) return 'BOT/BTO/KSP';
+    if (/^SEWA(\s*-\s*KELOLAAN)?$/i.test(nama)) return 'SEWA';
+    return nama;
+  }
+  // Gabungkan item dengan grup sama (urutan kemunculan pertama dipertahankan).
+  function gabung(items, add) {
+    var out = [], idx = {};
+    items.forEach(function (it) {
+      var g = grup(it.nama);
+      if (g === null) return;
+      if (idx[g] === undefined) { idx[g] = out.length; out.push(Object.assign({}, it, { nama: g, _n: 1 })); }
+      else { add(out[idx[g]], it); out[idx[g]]._n++; }
+    });
+    return out;
+  }
+
   function fromSheet(rows) {
     var d = { fetched_at: new Date().toISOString(), stale: false };
 
@@ -467,12 +486,15 @@
     for (; r < rows.length; r++) {
       var nama = cellAt(rows, r, 1);
       if (/^TOTAL/i.test(nama)) break;
-      // Jagir (bunga giro) tidak ditampilkan di dashboard.
-      if (!nama || !/^\d+$/.test(cellAt(rows, r, 0)) || /^JAGIR\b/i.test(nama)) continue;
+      if (!nama || !/^\d+$/.test(cellAt(rows, r, 0))) continue;
       d.jenis.push({ nama: nama, bulanan: rows[r].slice(2, 14).map(n), total: n(rows[r][14]) });
     }
+    d.jenis = gabung(d.jenis, function (a, b) {
+      a.total += b.total;
+      a.bulanan = a.bulanan.map(function (v, m) { return v + b.bulanan[m]; });
+    });
     if (!d.jenis.length) throw new Error('Format sheet berubah: data jenis penerimaan kosong.');
-    // Total bulanan dijumlahkan dari jenis non-Jagir (baris TOTAL PENERIMAAN di sheet termasuk Jagir).
+    // Total bulanan dijumlahkan dari jenis yang ditampilkan (baris TOTAL PENERIMAAN di sheet termasuk Jagir & denda).
     d.monthly_total = d.jenis[0].bulanan.map(function (_, m) {
       return d.jenis.reduce(function (s, j) { return s + j.bulanan[m]; }, 0);
     });
@@ -484,11 +506,16 @@
       var tn = cellAt(rows, r, 1);
       if (!tn) break;
       var t = { nama: tn, target: n(rows[r][2]), realisasi: n(rows[r][3]), persen: n(rows[r][4]), is_total: /^TOTAL/i.test(tn) };
-      if (!/JAGIR/i.test(tn)) d.target.push(t);
+      d.target.push(t);
       // Kartu utama memakai TOTAL (EXCL. JAGIR)
       if (/^TOTAL \(EXCL/i.test(tn)) { d.total_target = t.target; d.total_realisasi = t.realisasi; d.persen_capaian = t.persen; }
       if (/^TOTAL \(INCL/i.test(tn)) break;
     }
+    d.target = gabung(d.target, function (a, b) { a.target += b.target; a.realisasi += b.realisasi; })
+      .map(function (t) {
+        if (t._n > 1) t.persen = t.target > 0 ? Math.round(t.realisasi / t.target * 10000) / 100 : 0;
+        return t;
+      });
 
     // 3. Perbandingan tahun (incl. Jagir). YoY dihitung pada periode yang sama (s.d. bulan terakhir berisi),
     //    bukan total setahun tahun lalu vs YTD tahun ini.
