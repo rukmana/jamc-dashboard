@@ -300,7 +300,7 @@
   function hero(d) {
     var real = num(d.total_realisasi), target = num(d.total_target), persen = num(d.persen_capaian);
     var yoy = num(d.perbandingan && d.perbandingan.yoy_persen), naik = yoy >= 0;
-    return card('Total Realisasi Penerimaan', 'Terhadap target tahun ' + d.tahun, [
+    return card('Total Realisasi Penerimaan', 'Excl. Jagir, terhadap target tahun ' + d.tahun, [
       h('div', { class: 'jamc-hero' }, [
         h('div', null, [
           h('div', { class: 'jamc-hero-num', title: rpFull(real), text: rp(real) }),
@@ -483,7 +483,9 @@
       if (!tn) break;
       var t = { nama: tn, target: n(rows[r][2]), realisasi: n(rows[r][3]), persen: n(rows[r][4]), is_total: /^TOTAL/i.test(tn) };
       d.target.push(t);
-      if (/^TOTAL \(INCL/i.test(tn)) { d.total_target = t.target; d.total_realisasi = t.realisasi; d.persen_capaian = t.persen; break; }
+      // Kartu utama memakai TOTAL (EXCL. JAGIR)
+      if (/^TOTAL \(EXCL/i.test(tn)) { d.total_target = t.target; d.total_realisasi = t.realisasi; d.persen_capaian = t.persen; }
+      if (/^TOTAL \(INCL/i.test(tn)) break;
     }
 
     // 3. Perbandingan tahun (incl. Jagir). YoY dihitung pada periode yang sama (s.d. bulan terakhir berisi),
