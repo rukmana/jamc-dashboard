@@ -317,8 +317,7 @@
   }
 
   function perJenis(d) {
-    // Jagir (bunga giro) tidak ditampilkan di sini; persentase "dari total" dihitung tanpa Jagir.
-    var list = (d.jenis || []).filter(function (j) { return !/^JAGIR\b/i.test(j.nama); });
+    var list = d.jenis || [];
     if (!list.length) return null;
     var maxV = maxOf(list, function (j) { return num(j.total); });
     var grand = list.reduce(function (s, j) { return s + num(j.total); }, 0);
@@ -467,12 +466,14 @@
     d.jenis = [];
     for (; r < rows.length; r++) {
       var nama = cellAt(rows, r, 1);
-      if (/^TOTAL/i.test(nama)) { d.monthly_total = rows[r].slice(2, 14).map(n); break; }
-      if (!nama || !/^\d+$/.test(cellAt(rows, r, 0))) continue;
+      if (/^TOTAL/i.test(nama)) break;
+      // Jagir (bunga giro) tidak ditampilkan di dashboard.
+      if (!nama || !/^\d+$/.test(cellAt(rows, r, 0)) || /^JAGIR\b/i.test(nama)) continue;
       d.jenis.push({ nama: nama, bulanan: rows[r].slice(2, 14).map(n), total: n(rows[r][14]) });
     }
     if (!d.jenis.length) throw new Error('Format sheet berubah: data jenis penerimaan kosong.');
-    if (!d.monthly_total) d.monthly_total = d.jenis[0].bulanan.map(function (_, m) {
+    // Total bulanan dijumlahkan dari jenis non-Jagir (baris TOTAL PENERIMAAN di sheet termasuk Jagir).
+    d.monthly_total = d.jenis[0].bulanan.map(function (_, m) {
       return d.jenis.reduce(function (s, j) { return s + j.bulanan[m]; }, 0);
     });
 
@@ -483,7 +484,7 @@
       var tn = cellAt(rows, r, 1);
       if (!tn) break;
       var t = { nama: tn, target: n(rows[r][2]), realisasi: n(rows[r][3]), persen: n(rows[r][4]), is_total: /^TOTAL/i.test(tn) };
-      d.target.push(t);
+      if (!/JAGIR/i.test(tn)) d.target.push(t);
       // Kartu utama memakai TOTAL (EXCL. JAGIR)
       if (/^TOTAL \(EXCL/i.test(tn)) { d.total_target = t.target; d.total_realisasi = t.realisasi; d.persen_capaian = t.persen; }
       if (/^TOTAL \(INCL/i.test(tn)) break;
