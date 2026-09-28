@@ -317,7 +317,8 @@
   }
 
   function perJenis(d) {
-    var list = d.jenis || [];
+    // Jagir (bunga giro) tidak ditampilkan di sini; persentase "dari total" dihitung tanpa Jagir.
+    var list = (d.jenis || []).filter(function (j) { return !/^JAGIR\b/i.test(j.nama); });
     if (!list.length) return null;
     var maxV = maxOf(list, function (j) { return num(j.total); });
     var grand = list.reduce(function (s, j) { return s + num(j.total); }, 0);
